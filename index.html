@@ -36,6 +36,16 @@ h1{font-size:clamp(22px,3.2vw,30px);font-weight:600;margin:0;letter-spacing:-.01
 @media (max-width:640px){.stage{aspect-ratio:4/5;}}
 .stage canvas{display:block;width:100%;height:100%;touch-action:none;}
 .hint{position:absolute;left:12px;bottom:10px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);pointer-events:none;}
+.fsbtn{position:absolute;right:10px;top:10px;z-index:5;display:inline-flex;align-items:center;gap:6px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:600;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;cursor:pointer;opacity:.94;}
+.fsbtn:hover{border-color:var(--accent);opacity:1;}
+.fsbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.fsbtn .fs-out{display:none;}
+.fsbtn[aria-pressed="true"] .fs-in{display:none;}
+.fsbtn[aria-pressed="true"] .fs-out{display:inline;}
+.stage:fullscreen{width:100vw;height:100vh;max-height:none;aspect-ratio:auto;border:0;border-radius:0;}
+.stage:-webkit-full-screen{width:100vw;height:100vh;max-height:none;aspect-ratio:auto;border:0;border-radius:0;}
+.stage.fs-fake{position:fixed;inset:0;z-index:1000;width:100vw;height:100vh;height:100dvh;max-height:none;aspect-ratio:auto;border:0;border-radius:0;}
+body.fs-lock{overflow:hidden;}
 .lbl{font-family:var(--f-display);font-size:12px;font-weight:500;color:var(--label-fg);background:var(--label-bg);border:1px solid var(--line);border-radius:4px;padding:2px 7px;white-space:nowrap;pointer-events:none;}
 .lbl.north{font-family:var(--f-mono);font-weight:600;color:var(--accent);}
 .controls{display:flex;flex-wrap:wrap;gap:18px 28px;}
@@ -64,6 +74,7 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 
   <div class="stage" id="stage">
     <div class="hint" id="hint">seret untuk memutar · cubit atau scroll untuk zoom · dua jari untuk geser</div>
+    <button class="fsbtn" id="fsbtn" type="button" aria-pressed="false" aria-label="Tampilkan ilustrasi layar penuh"><svg class="fs-in" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg><svg class="fs-out" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg><span>Layar penuh</span></button>
   </div>
 
   <div class="controls">
@@ -1689,6 +1700,31 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
     renderer.setSize(r.width, r.height, false); labelR.setSize(r.width, r.height);
     camera.aspect = r.width / Math.max(1,r.height); camera.updateProjectionMatrix();
   }
+  // Tombol layar penuh: Fullscreen API, dengan cadangan tampilan penuh lewat CSS (mis. Safari iPhone)
+  const fsBtn = document.getElementById('fsbtn');
+  const fsReq = stage.requestFullscreen || stage.webkitRequestFullscreen;
+  const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+  const fsFake = on => { stage.classList.toggle('fs-fake', on); document.body.classList.toggle('fs-lock', on); };
+  const isFs = () => document.fullscreenElement === stage || document.webkitFullscreenElement === stage || stage.classList.contains('fs-fake');
+  function syncFs(){
+    const on = isFs();
+    fsBtn.setAttribute('aria-pressed', String(on));
+    fsBtn.setAttribute('aria-label', on ? 'Keluar dari layar penuh' : 'Tampilkan ilustrasi layar penuh');
+    fsBtn.querySelector('span').textContent = on ? 'Keluar' : 'Layar penuh';
+    resize();
+  }
+  fsBtn.addEventListener('click', () => {
+    if (isFs()) {
+      if (stage.classList.contains('fs-fake')) fsFake(false); else if (fsExit) fsExit.call(document);
+    } else if (fsReq) {
+      try { const p = fsReq.call(stage); if (p && p.catch) p.catch(() => { fsFake(true); syncFs(); }); }
+      catch (e) { fsFake(true); }
+    } else fsFake(true);
+    syncFs();
+  });
+  document.addEventListener('fullscreenchange', syncFs);
+  document.addEventListener('webkitfullscreenchange', syncFs);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && stage.classList.contains('fs-fake')) { fsFake(false); syncFs(); } });
   new ResizeObserver(resize).observe(stage);
   resize(); setView('tenggara');
 
